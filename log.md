@@ -4,6 +4,7 @@
 ==================**PHASE 1**==================
 
 **INPUT PROMPT:**
+
 Role: Senior Quality Assurance Engineer
 Task: Analyze Spring Boot code for unit & integration testing. + _CODE FILE_
 Frameworks: JUnit 5, Mockito, MockMvc
@@ -92,143 +93,99 @@ Analyze the provided code, focusing on `OrderController` and `OrderService`. Ide
    Scope pending order checks (getPendingOrderForEvent(customer.getCustomerId(), ...))53.
    Assign ownership when creating a new order (orderService.createOrderWithTicketTypes(request, customer))54.
    Ownership Verification: In PaymentController, the ID is also used to ensure the order being paid for belongs to the currently logged-in user (!order.getCustomer().getAccount().getAccountId().equals(accountId))55.
+---------------------------------------------------
+================== PHASE 1: CODE ANALYSIS OPPTIMIZE ==================
+
+🎯 Role: Senior Quality Assurance Engineer  
+🎯 Goal: Analyze provided Spring Boot codebase to design an optimal testing strategy.
+
+📘 Framework Context:
+- Spring Boot, JUnit 5, Mockito, MockMvc
+- Code files include: OrderController, OrderService, VoucherService, PaymentController, and PaymentService
+
+---
+
+🧩 TASK:
+You are to analyze the given code (focus on OrderController and OrderService) and produce a detailed, structured test analysis covering these areas:
+
+### 1️⃣ Core Business Logic
+Identify and summarize the main business rules and workflows implemented in these classes:
+- How orders are created, updated, or validated
+- How vouchers or discounts are applied
+- How payment or registration checks are performed
+
+### 2️⃣ Dependency Mapping
+List all **external dependencies** (repositories, services, HTTP requests, or utilities):
+- For each class, specify:
+  - Which dependencies must be **mocked** in **unit tests** (using Mockito)
+  - Which dependencies must be **mocked** in **controller tests** (using @MockBean with MockMvc)
+
+### 3️⃣ Critical Test Points
+Identify **high-risk or complex methods** that require thorough testing.  
+For each, describe:
+- Key logic branches or validation rules
+- Expected behavior for success/failure paths
+- Edge cases that should be tested
+
+### 4️⃣ Security & Authentication
+Examine how **user authentication** and **authorization** are handled:
+- Identify places where the current user ID or role is extracted (e.g., `httpRequest.getAttribute("currentUserId")`)
+- Explain how it affects controller or service logic
+- Suggest how to **simulate or mock** authenticated users in tests
+
+---
+
+🎯 OUTPUT FORMAT (required):
+Provide your analysis in the following structure:
+
+**A. Core Business Logic Summary**  
+(bullet points explaining main flows)
+
+**B. Dependencies to Mock**
+| Layer | Class | Dependency | Mock Type | Purpose |
+|--------|--------|-------------|------------|----------|
+| Service | OrderServiceImpl | OrderRepo | @Mock | simulate DB access |
+| Controller | OrderController | OrderService | @MockBean | isolate controller |
+
+**C. Critical Test Scenarios**
+- TC-01: ...
+- TC-02: ...
+- (Include edge cases & assertions)
+
+**D. Auth & Security Impacts**
+- Describe where authentication affects logic.
+- Suggest how to replicate logged-in user for unit/integration tests.
+
+---
+
+🧠 Additional Notes:
+- Assume the goal is 80–90% code coverage.
+- Focus on **logical correctness** over performance.
+- Prioritize **methods with branching logic, external calls, or user context**.
+
+
+
+
 
 ==================PHASE 2==================
 
-2.1**OrderService.createOrderWithTicketType()**
-
-**AI input:**
-Task: Generate the complete JUnit 5 test class for `OrderServiceImpl`.
-Framework: JUnit 5, Mockito, AssertJ.
-Focus: This test class must *only* test the `createOrderWithTicketTypes` method.
-
-Test Cases:
-Implement all test cases from this BDD matrix:
-[Dán BẢNG TEST CASE MATRIX ở trên vào đây]
-
-Requirements:
-1.  Use `@ExtendWith(MockitoExtension.class)`.
-2.  Use `@Mock` for all dependencies (`IOrderRepo`, `IEventRepo`, `ITicketTypeRepo`, `TicketTypeService`, `VoucherService`).
-3.  Use `@InjectMocks` for `OrderServiceImpl`.
-4.  Include a `@BeforeEach` method to set up common test data (Customer, Event, Host, TicketType, CreateOrderWithTicketTypeRequest).
-5.  Use `assertThatThrownBy(...)` to test all exception scenarios (TC-03, 04, 05, 06, 09, 12).
-6.  Use `Mockito.verify(...)` with `times(2)` (for TC-02, 10, 11), `times(1)` (for TC-01, 07, 08, 13), and `never()` to check interactions accurately.
-
-Advanced Mocking Requirements (CRITICAL):
-7.  **Mocking `orderRepo.save`:** The mock for `orderRepo.save(any(Order.class))` *must* use `thenAnswer()`. Inside the answer, it should retrieve the `Order` object, manually call `order.calculateTotalAmount()` on it, and then return that same order. This is essential to simulate the calculation logic that happens during the save operations[cite: 415, 422].
-8.  **Mocking `voucherService.applyVoucherToOrder` (void method):**
-    * For happy path tests (TC-02, 10, 11): Use `doAnswer()` to retrieve the `Order` argument and manually set its discount (e.g., `order.setVoucherDiscountAmount(...)`).
-    * For the failure test (TC-07): Use `doThrow(new RuntimeException(...))` to simulate a voucher failure[cite: 418].
-
-**AI output:**
-## Happy Path
-
-| ID | Kịch bản (Scenario) | Given (Điều kiện) | When (Hành động) | Then (Kết quả mong đợi) |
-| :--- | :--- | :--- | :--- | :--- |
-| TC-01 | Happy Path - Tạo đơn hàng không có voucher | 1. Event, TicketType hợp lệ (Giá 150.0). <br> 2. canPurchaseTickets = true. <br> 3. Request không có voucher code. | createOrderWithTicketTypes được gọi. | 1. reserveTickets được gọi 1 lần. <br> 2. voucherService không được gọi. <br> 3. orderRepo.save được gọi 1 lần. <br> 4. Trạng thái Order là PENDING. <br> 5. Tổng tiền (TotalAmount) là 165.0 (đã bao gồm VAT). |
-| TC-02 | Happy Path - Tạo đơn hàng với voucher hợp lệ | 1. Event, TicketType hợp lệ (Giá 200.0). <br> 2. canPurchaseTickets = true. <br> 3. Request có voucher "SALE10". <br> 4. voucherService được mock để giảm 20.0. | createOrderWithTicketTypes được gọi. | 1. reserveTickets được gọi 1 lần. <br> 2. voucherService.applyVoucherToOrder được gọi 1 lần. <br> 3. orderRepo.save được gọi 2 lần. <br> 4. Trạng thái Order là PENDING. <br> 5. Tổng tiền (TotalAmount) là 198.0 (đã bao gồm VAT và giảm giá). |
-
------
-
-## Error Handling (Validation)
-
-| ID | Kịch bản (Scenario) | Given (Điều kiện) | When (Hành động) | Then (Kết quả mong đợi) |
-| :--- | :--- | :--- | :--- | :--- |
-| TC-03 | Error - Không tìm thấy Event | 1. eventRepo.findById trả về Optional.empty(). | createOrderWithTicketTypes được gọi. | 1. Ném ra IllegalArgumentException ("Event not found"). <br> 2. orderRepo.save không được gọi. |
-| TC-04 | Error - Request không có TicketType | 1. Event hợp lệ. <br> 2. Request có ticketTypeId = null. | createOrderWithTicketTypes được gọi. | 1. Ném ra IllegalArgumentException ("At least one ticket type must be specified"). <br> 2. orderRepo.save không được gọi. |
-| TC-05 | Error - Không tìm thấy TicketType | 1. Event hợp lệ. <br> 2. ticketTypeRepo.findById trả về Optional.empty(). | createOrderWithTicketTypes được gọi. | 1. Ném ra IllegalArgumentException ("Ticket type not found"). <br> 2. orderRepo.save không được gọi. |
-| TC-06 | Error - Hết vé (Không thể mua) | 1. Event, TicketType hợp lệ. <br> 2. ticketTypeService.canPurchaseTickets = false. | createOrderWithTicketTypes được gọi. | 1. Ném ra IllegalStateException ("Cannot purchase ticket"). <br> 2. reserveTickets không được gọi. <br> 3. orderRepo.save không được gọi. |
-
------
-
-## Edge Cases & Logic Nghiệp vụ
-
-| ID | Kịch bản (Scenario) | Given (Điều kiện) | When (Hành động) | Then (Kết quả mong đợi) |
-| :--- | :--- | :--- | :--- | :--- |
-| TC-07 | Edge - VoucherService ném ra lỗi | 1. Event, TicketType hợp lệ (Giá 300.0). <br> 2. canPurchaseTickets = true. <br> 3. Request có voucher "EXPIRED10". <br> 4. voucherService.applyVoucherToOrder được mock để ném ra Exception. | createOrderWithTicketTypes được gọi. | 1. Đơn hàng vẫn được tạo (do logic try-catch 1111). <br> 2. orderRepo.save được gọi 1 lần (lỗi xảy ra trước lần save thứ 2). <br> 3. Tổng tiền là 330.0 (không áp dụng giảm giá). |
-| TC-08 | Edge - Áp dụng chiết khấu của Host | 1. Event, TicketType hợp lệ (Giá 300.0). <br> 2. Host của Event có hostDiscountPercent = 20.0. <br> 3. Request không có voucher. | createOrderWithTicketTypes được gọi. | 1. orderRepo.save được gọi 1 lần. <br> 2. Order có hostDiscountPercent = 20.0. <br> 3. Tổng tiền là 264.0 (đã bao gồm VAT và chiết khấu host). |
-| TC-09 | Error - Lỗi trong quá trình reserveTickets | 1. Event, TicketType hợp lệ. <br> 2. canPurchaseTickets = true. <br> 3. ticketTypeService.reserveTickets được mock để ném ra Exception. | createOrderWithTicketTypes được gọi. | 1. Ném ra IllegalStateException (hoặc bất cứ lỗi gì service ném ra). <br> 2. orderRepo.save không được gọi (do @Transactional rollback). |
-| TC-10 | Edge - Tổng chiết khấu \> Giá vé | 1. TicketType giá 100.0. <br> 2. Host discount 20% (20.0). <br> 3. Voucher "BIGSALE" giảm 90.0. | createOrderWithTicketTypes được gọi. | 1. orderRepo.save được gọi 2 lần. <br> 2. Tổng tiền (TotalAmount) cuối cùng phải là 0.0 (được kẹp (clamped) ở mức 0). |
-| TC-11 | Edge - Vé miễn phí (Giá vé = 0) | 1. TicketType giá 0.0. <br> 2. Host discount 10%. <br> 3. Voucher "FREESALE" giảm 10.0. | createOrderWithTicketTypes được gọi. | 1. orderRepo.save được gọi 2 lần. <br> 2. Tổng tiền (TotalAmount) cuối cùng phải là 0.0. |
-| TC-12 | Error - Giá vé bị null | 1. Event hợp lệ. <br> 2. TicketType hợp lệ, nhưng ticketType.getPrice() = null. | createOrderWithTicketTypes được gọi. | 1. Ném ra NullPointerException (từ calculateTotalAmount). <br> 2. orderRepo.save không được gọi. |
-| TC-13 | Edge - Mã Voucher chỉ có khoảng trắng | 1. Event, TicketType hợp lệ. <br> 2. Request có voucherCode = " ". | createOrderWithTicketTypes được gọi. | 1. orderRepo.save được gọi 1 lần. <br> 2. voucherService.applyVoucherToOrder không được gọi (do logic if 2). |
-
-
 **2.2 OrderController.createOrderWithTicketType**
 
-Role: Bạn là một Kỹ sư Kiểm thử Tự động (Automation QA) cao cấp với 20 năm kinh nghiệm về Spring Boot.
+Role: Bạn là một Kỹ sư Kiểm thử Tự động (Automation QA) cao cấp với 20 năm kinh nghiệm về Spring Boot. (VAI TRÒ)
 
 Task: Phân tích kỹ lưỡng method createWithTicketTypes của OrderController dưới đây và tạo ra một Bảng Ma trận Test Case (Test Case Matrix) chi tiết ở định dạng BDD (Given/When/Then).
 
-Code to Analyze:
+Code to Analyze:(bỐI CẢNH)
 
 Java
 
-@RestController
-@RequestMapping("/api/orders")
-public class OrderController {
-// ... (Giả sử @Autowired các dependencies đã có) ...
+[SOURC_CODE]
 
-    @PostMapping("/create-with-ticket-types")
-    public ResponseEntity<?> createWithTicketTypes(@Valid @RequestBody CreateOrderWithTicketTypeRequest request, HttpServletRequest httpRequest) {
-        try {
-            Long accountId = (Long) httpRequest.getAttribute("currentUserId"); // [Điểm rủi ro 1: Ép kiểu]
-            if (accountId == null) {
-                return ResponseEntity.status(401).body(Map.of("success", false, "message", "User not logged in"));
-            }
-
-            Customer customer = customerRepo.findByAccount_AccountId(accountId).orElse(null);
-            if (customer == null) {
-                return ResponseEntity.status(404).body(Map.of("success", false, "message", "Customer not found"));
-            }
-
-            // [Điểm rủi ro 2: Logic nghiệp vụ - Đã đăng ký]
-            if (orderService.hasCustomerRegisteredForEvent(customer.getCustomerId(), request.getEventId())) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false, 
-                    "message", "You have already registered for this event"
-                ));
-            }
-
-            // [Điểm rủi ro 3: Logic nghiệp vụ - Hủy đơn PENDING cũ]
-            Optional<Order> pendingOrder = orderService.getPendingOrderForEvent(customer.getCustomerId(), request.getEventId());
-            if (pendingOrder.isPresent()) {
-                Order existingOrder = pendingOrder.get();
-                orderService.cancelOrder(existingOrder.getOrderId()); // [Điểm rủi ro 4: Lỗi trong lúc hủy]
-            }
-
-            Order order = orderService.createOrderWithTicketTypes(request, customer);
-            
-            // [Điểm rủi ro 5: Lỗi tạo response]
-            Map<String, Object> response = Map.of(
-                "success", true, 
-                "orderId", order.getOrderId(), // Sẽ bị NullPointerException nếu orderId là null
-                "totalAmount", order.getTotalAmount(),
-                "status", order.getStatus().toString()
-            );
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            
-            String errorMessage = e.getMessage();
-            // [Điểm rủi ro 6: Logic xử lý lỗi]
-            if (errorMessage == null || errorMessage.trim().isEmpty()) {
-                errorMessage = "Order creation failed: " + e.getClass().getSimpleName();
-            }
-            
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false, 
-                "message", errorMessage
-            ));
-        }
-    }
-}
 Requirements:
 
 Hãy tạo Test Case Matrix bao gồm 4 phần sau:
 
-Security & Authentication Cases: (Các kịch bản 401, 404).
+Security & Authentication Cases: (Các kịch bản 401, 404).(TÁC VỤ)
 
 Core Business Logic Cases: (Happy path, Kịch bản đã đăng ký, Kịch bản đặt lại đơn PENDING).
 
@@ -407,4 +364,195 @@ public class OrderController {
 
 
   
+==================PHASE 3==================
+Create JUnit 5 unit tests for the OrderServiceImpl class in a Spring Boot project.
+
+Focus on these methods:
+1. hasCustomerRegisteredForEvent(Long customerId, Long eventId)
+2. getPendingOrderForEvent(Long customerId, Long eventId)
+
+Test Scenarios:
+- Customer has a PAID order → should return true
+- Customer has only PENDING orders → should return false
+- Customer has CANCELLED orders → should return false
+- Customer has no orders → should return false
+- Multiple orders (1 PAID, 1 PENDING) → should return true
+- getPendingOrderForEvent() returns the pending order if exists, else empty
+
+Requirements:
+- Use JUnit 5 + Mockito (no Spring context)
+- Use @Mock for IOrderRepo and @InjectMocks for OrderServiceImpl
+- Use @BeforeEach to setup data
+- Use assertTrue/assertFalse/assertEquals appropriately
+- Descriptive test method names (e.g. TC01_ShouldReturnTrue_WhenPaidOrderExists)
+- Keep code clean and readable
+---------------------------------------------------------------------------------
+
+**AI OUTPUT:**
+@ExtendWith(MockitoExtension.class)
+class OrderServiceTest {
+
+    @Mock
+    private IOrderRepo orderRepo;
+
+    @InjectMocks
+    private OrderServiceImpl orderService;
+
+    private Customer customer;
+    private Event event;
+
+    @BeforeEach
+    void setup() {
+        customer = new Customer();
+        customer.setCustomerId(1L);
+
+        event = new Event();
+        event.setId(10L);
+    }
+
+    @Test
+    void TC01_ShouldReturnTrue_WhenPaidOrderExists() {
+        Order paid = new Order();
+        paid.setCustomer(customer);
+        paid.setEvent(event);
+        paid.setStatus(OrderStatus.PAID);
+
+        when(orderRepo.findByCustomerId(customer.getCustomerId()))
+                .thenReturn(List.of(paid));
+
+        boolean result = orderService.hasCustomerRegisteredForEvent(customer.getCustomerId(), event.getId());
+        assertTrue(result);
+    }
+
+    @Test
+    void TC02_ShouldReturnFalse_WhenOnlyPendingOrderExists() {
+        Order pending = new Order();
+        pending.setCustomer(customer);
+        pending.setEvent(event);
+        pending.setStatus(OrderStatus.PENDING);
+
+        when(orderRepo.findByCustomerId(customer.getCustomerId()))
+                .thenReturn(List.of(pending));
+
+        boolean result = orderService.hasCustomerRegisteredForEvent(customer.getCustomerId(), event.getId());
+        assertFalse(result);
+    }
+
+    @Test
+    void TC03_ShouldReturnEmpty_WhenNoPendingOrder() {
+        when(orderRepo.findByCustomerId(customer.getCustomerId()))
+                .thenReturn(Collections.emptyList());
+
+        Optional<Order> pending = orderService.getPendingOrderForEvent(customer.getCustomerId(), event.getId());
+        assertTrue(pending.isEmpty());
+    }
+}
+
+
 ==================PHASE 4==================
+
+🧩 Help me debug this failing JUnit test (Spring Boot project)
+
+❌ ERROR:
+[Dán nguyên stacktrace lỗi tại đây]
+
+🧪 TEST CODE:
+[Dán đoạn @Test bị lỗi, bao gồm setup mock hoặc initData()]
+
+⚙️ SOURCE FUNCTION:
+[Dán function trong service hoặc controller đang được test]
+
+📋 CONTEXT:
+- JUnit 5 (Jupiter)
+- Mockito for mocking
+- Spring Boot project (service layer or controller layer)
+
+🎯 QUESTIONS:
+1. Giải thích nguyên nhân test fail dựa vào stacktrace.
+2. Xác định lỗi thuộc nhóm nào (Mock setup / InjectMocks / Logic / Assertion).
+3. Gợi ý fix chi tiết trong test code (sử dụng đúng annotation và mock).
+4. Nếu có thể, viết lại phiên bản test đã được sửa đúng.
+5. Giải thích tại sao cách sửa đó đúng.
+
+ **Example**
+🧩 Help me debug this failing JUnit test (Spring Boot project)
+
+❌ ERROR:
+java.lang.NullPointerException: Cannot invoke "com.group02.openevent.repository.IOrderRepo.findByCustomerId(java.lang.Long)" because "this.orderRepo" is null
+    at com.group02.openevent.service.impl.OrderServiceImpl.hasCustomerRegisteredForEvent(OrderServiceImpl.java:205)
+    at com.group02.openevent.service.OrderServiceTest.TC02_ShouldReturnFalse_WhenOnlyPendingOrderExists(OrderServiceTest.java:84)
+
+🧪 TEST CODE:
+@InjectMocks
+private OrderServiceImpl orderService;
+@Mock
+private IOrderRepo orderRepo;
+
+@Test
+void TC02_ShouldReturnFalse_WhenOnlyPendingOrderExists() {
+    Order pending = new Order();
+    pending.setCustomer(customer);
+    pending.setEvent(event);
+    pending.setStatus(OrderStatus.PENDING);
+
+    when(orderRepo.findByCustomerId(customer.getCustomerId()))
+        .thenReturn(List.of(pending));
+
+    boolean result = orderService.hasCustomerRegisteredForEvent(customer.getCustomerId(), event.getId());
+    assertFalse(result, "Pending order should not count as registered");
+}
+
+⚙️ SOURCE FUNCTION:
+@Override
+public boolean hasCustomerRegisteredForEvent(Long customerId, Long eventId) {
+    List<Order> orders = orderRepo.findByCustomerId(customerId);
+    return orders.stream()
+        .anyMatch(order -> order.getEvent().getId().equals(eventId)
+            && order.getStatus() == OrderStatus.PAID);
+}
+
+📋 CONTEXT:
+- JUnit 5 (Jupiter)
+- Mockito for mocking
+- Spring Boot project (service layer)
+
+🎯 QUESTIONS:
+1. Giải thích nguyên nhân test fail dựa vào stacktrace.
+2. Xác định lỗi thuộc nhóm nào (Mock setup / InjectMocks / Logic / Assertion).
+3. Gợi ý fix chi tiết trong test code (sử dụng đúng annotation và mock).
+4. Nếu có thể, viết lại phiên bản test đã được sửa đúng.
+5. Giải thích tại sao cách sửa đó đúng.
+
+**OUTPUT**
+1️⃣ Nguyên nhân test fail:
+
+Lỗi NullPointerException xảy ra do orderRepo trong OrderServiceImpl là null.
+Điều này nghĩa là Mockito chưa inject mock orderRepo vào orderService, mặc dù bạn có dùng @InjectMocks.
+
+phân loại lỗi:
+Nhóm lỗi	                 Mô tả
+
+🧱 Mock setup / Injection	Sai annotation hoặc context test khiến Mockito không khởi tạo mock dependencies đúng cách.
+❌ Không phải lỗi logic	   Business logic hasCustomerRegisteredForEvent hoạt động đúng.
+❌ Không phải lỗi assertion	Vì test không đến được bước assertFalse() (fail trước đó).
+
+Gợi ý fix chi tiết:.....
+
+
+
+========================PHASE 5========================
+
+Create Jest mock objects for the following dependencies used ORDERSERVICE:
+- ProductService.getProduct(id)
+- UserService.getUserById(id)
+- DiscountService.validateCode(code)
+
+Requirements:
+1️⃣ Each service must be mocked with realistic test data (e.g., product info, user info, discount code validity).
+2️⃣ Use proper Jest mock setup/teardown via beforeEach() and afterEach().
+3️⃣ Include at least one test that verifies interactions (e.g., expect(...).toHaveBeenCalledWith()).
+4️⃣ Follow clean structure with AAA pattern (Arrange – Act – Assert).
+5️⃣ Output complete runnable testt code. Show example output.
+
+
+
