@@ -2,6 +2,8 @@
 ### PROMPT:
 
 ==================**PHASE 1**==================
+Timestamp: 2025-10-25 08:45:00
+Mục đích : Để có được cái nhìn tổng quan về codebase (cụ thể là OrderController và OrderService) trước khi viết test. Mục tiêu là xác định logic nghiệp vụ, các phụ thuộc cần mock, và các điểm rủi ro cao.
 
 **INPUT PROMPT:**
 
@@ -163,11 +165,18 @@ Provide your analysis in the following structure:
 - Focus on **logical correctness** over performance.
 - Prioritize **methods with branching logic, external calls, or user context**.
 
+Lessons Learned (Bài học):
 
+Một bản phân tích có cấu trúc 4 phần (Logic, Dependencies, Critical Points, Auth) là cực kỳ cần thiết để lập kế hoạch test (test plan) toàn diện.
 
+OrderController.createWithTicketTypes được xác định là rủi ro cao nhất do có logic kiểm tra trạng thái (hủy đơn PENDING cũ) trước khi tạo đơn mới.
 
 
 ==================PHASE 2==================
+
+Timestamp: 2025-10-25 09:15:00
+
+Rationale (Mục đích): Chuyển đổi phân tích từ Phase 1 thành các kịch bản test case (BDD) cụ thể cho phương thức createWithTicketTypes. Tập trung vào các luồng nghiệp vụ chính, xác thực (auth) và các trường hợp ngoại lệ (edge case) đã được đánh dấu rủi ro.
 
 **2.2 OrderController.createOrderWithTicketType**
 
@@ -257,6 +266,8 @@ Giả định `CreateOrderWithTicketTypeRequest` DTO có các annotation `@NotNu
 | **Order Creation (Exception)** | **EDGE-005 (Risk 6)** | Một `Customer` đã đăng nhập hợp lệ.<br>VÀ (Mocking) `orderService.createOrderWithTicketTypes(...)` ném ra một `Exception` mà `e.getMessage()` trả về `null`. | Customer gửi POST request đến `/api/orders/create-with-ticket-types` | Khối `catch` bắt được lỗi.<br>VÀ logic xử lý lỗi tại **[Điểm rủi ro 6]** được kích hoạt.<br>VÀ hệ thống trả về response **400 Bad Request**.<br>VÀ message chứa tên của class Exception (ví dụ: `"Order creation failed: CustomInternalException"`). |
 ---
 **optimize**
+
+Rationale (Mục đích): Ma trận test case ở Phase 2 đã bao phủ tốt logic đơn luồng. Tuy nhiên, logic "check-then-act" (kiểm tra đơn PENDING, rồi hủy, rồi tạo mới) rất dễ bị lỗi concurrency. Prompt này yêu cầu một vai trò khác (Kiến trúc sư) để bổ sung các kịch bản về Race Condition (TOCTOU) mà QA có thể đã bỏ sót.
 AI input: tôi muốn optimize lại test case để bổ sung các khía cạnh khác với vai trò khác( để có đa dạng góc nhìn về hàm ), mà các test case trên chưa đề cập đến
 
 AI output:
@@ -294,6 +305,13 @@ Các kịch bản này mô phỏng nhiều request xung đột đến cùng lúc
 | Order Creation (Concurrency) | **CON-003** (TOCTOU: Hết vé) | Một Customer hợp lệ, chưa đăng ký, không có đơn PENDING.<br>VÀ Event có 1 vé cuối cùng. | Request A gọi API và vượt qua tất cả các check (Auth, Registered, Pending).<br>VÀ (Timing) Một Request B (từ customer khác) lấy mất vé cuối cùng.<br>VÀ `orderService.createOrderWithTicketTypes` (của A) được gọi. | Tầng service (bên trong `create...`) phải kiểm tra lại số lượng vé.<br>VÀ Service ném ra `IllegalStateException("Tickets unavailable")` (hoặc `OutOfStockException`).<br>VÀ Khối `catch` chung bắt được lỗi.<br>VÀ Hệ thống trả về 400 Bad Request với message "Tickets unavailable". |
 | Order Creation (Concurrency) | **CON-004** (TOCTOU: Đã đăng ký) | Một Customer hợp lệ, chưa đăng ký.<br>VÀ `hasCustomerRegisteredForEvent` trả về `false`. | Request A gọi API và vượt qua check `hasCustomerRegisteredForEvent`.<br>VÀ (Timing) Một giao dịch khác (ví dụ: webhook từ Request B) hoàn tất, cập nhật trạng thái của Customer là đã đăng ký (PAID).<br>VÀ `orderService.createOrderWithTicketTypes` (của A) được gọi. | Tầng service (hoặc DB constraint `(customerId, eventId, status='PAID')`) phải phát hiện sự xung đột.<br>VÀ Service ném ra `IllegalStateException("User already registered for this event")`.<br>VÀ Khối `catch` chung bắt được lỗi.<br>VÀ Hệ thống trả về 400 Bad Request với message "User already registered...". |
 ****
+
+Lessons Learned (Bài học):
+
+Định dạng BDD (Given/When/Then) rất rõ ràng để mô tả các kịch bản cho controller, đặc biệt là các luồng lỗi (401, 404, 400).
+
+Các kịch bản EDGE (ví dụ: ClassCastException, NullPointerException bên trong logic) là những ca sáng tạo và quan trọng mà mocking service có thể giúp phát hiện.
+
 ==================PHASE 3==================
 **2.1 OrderController.createOrderWithTicketType**
 
@@ -362,9 +380,22 @@ public class OrderController {
     * (Cho các kịch bản lỗi) Sử dụng `Mockito.verify(orderService, never()).createOrderWithTicketTypes(...);` để đảm bảo logic cốt lõi không bị kích hoạt sai.
 **AI output:**
 
+Lessons Learned (Bài học):
+
+Thay đổi "vai trò" (Persona) từ QA sang Solution Architect giúp phát hiện ra một nhóm lỗi hoàn toàn mới (Concurrency/Race Conditions) mà prompt ban đầu đã bỏ qua.
+
+Logic "check-then-act" là một "red flag" lớn, cần các test case TOCTOU (Time-of-check-to-time-of-use).
 
   
 ==================PHASE 3==================
+Timestamp: 2025-10-25 10:00:00
+
+Rationale (Mục đích): Chuyển đổi các ma trận test case (BDD) từ Phase 2 và 2.5 thành code test JUnit 5. Phase này được chia làm hai phần:
+
+(Không có trong log) Tạo code test cho Controller (@WebMvcTest).
+
+Tạo code test cho Service (@ExtendWith(MockitoExtension.class)) để kiểm tra các hàm logic phụ trợ.
+
 Create JUnit 5 unit tests for the OrderServiceImpl class in a Spring Boot project.
 
 Focus on these methods:
@@ -448,8 +479,17 @@ class OrderServiceTest {
     }
 }
 
+Lessons Learned (Bài học):
+
+Test ở cấp độ Service (Unit Test) đơn giản, nhanh và tập trung vào logic nghiệp vụ (ví dụ: PAID thì true, PENDING thì false).
+
+Sử dụng @ExtendWith(MockitoExtension.class) là rất quan trọng để @Mock và @InjectMocks hoạt động.
+
 
 ==================PHASE 4==================
+Timestamp: 2025-10-25 10:45:00
+
+Rationale (Mục đích): Một trong các test case (giống hệt TC02 từ Phase 3) đang bị fail với lỗi NullPointerException. Prompt này được thiết kế để yêu cầu AI phân tích stacktrace và code để tìm ra nguyên nhân và cách sửa lỗi.
 
 🧩 Help me debug this failing JUnit test (Spring Boot project)
 
@@ -538,6 +578,11 @@ Nhóm lỗi	                 Mô tả
 
 Gợi ý fix chi tiết:.....
 
+Lessons Learned (Bài học):
+
+Bài học quan trọng nhất: Khi gặp NullPointerException trên một dependency được đánh dấu @Mock trong một service được đánh dấu @InjectMocks, nguyên nhân 99% là do thiếu "Runner" hoặc "Extension" để kích hoạt Mockito.
+
+Trong JUnit 5, giải pháp là @ExtendWith(MockitoExtension.class)
 
 
 ========================PHASE 5========================
