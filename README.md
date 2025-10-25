@@ -43,7 +43,6 @@ Các metrics này đáp ứng hoặc vượt qua các yêu cầu của cuộc th
 | **Loại Test** | Unit + Integration | **Đã đáp ứng** (Sử dụng `@WebMvcTest` và `@Mock`) |
 | **Số lượng Assertion** | Trung bình 3-5 / test  | **Đã đáp ứng** (Sử dụng nhiều `assertThat` và `andExpect`) |
 
-Dưới đây là bảng tổng hợp độ bao phủ (coverage) cho **chỉ những hàm được kiểm thử** (những hàm có instruction coverage \> 0%) dựa trên các file test của bạn.
 
 ## Báo cáo Coverage Chi tiết (Các hàm đã test)
 
